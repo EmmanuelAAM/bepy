@@ -1,22 +1,23 @@
 from core.config import settings
-from datetime import datetime, timedelta, timezone
 from dependencies.database import get_db
+from datetime import datetime, timedelta, timezone
 from fastapi import Depends
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt
-from passlib.context import CryptContext
 from models.user_model import User, UserWithRestrictedProperties
-from schemas.user_schema import UserSchema
+from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from typing import Optional
 import bcrypt
 
+from schemas.user_schema import UserSchema
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-def get_user_by_username(db: Session, username: str):
-    user_db = db.query(UserWithRestrictedProperties).filter(User.username == username).first()
+def get_user_by_username(username: str, db: Session, model: UserWithRestrictedProperties | User  = UserWithRestrictedProperties):
+    user_db = db.query(model).filter(User.username == username).first()
     return user_db
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
@@ -33,10 +34,11 @@ def decode_token(token: str):
     payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
     return payload
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+def get_current_user(token: str, db: Session):
     payload = decode_token(token)
     username: Optional[str] = payload.get("sub")
-    current_user = User(get_user_by_username(username))
+    print(username)
+    current_user = get_user_by_username(username, db, User)
     return current_user
 
 def hash_password(password: str) -> str:

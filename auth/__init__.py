@@ -1,8 +1,8 @@
-from dependencies.database import get_db
+from .auth_utils import create_access_token, get_current_user, get_user_by_username, verify_password, oauth2_scheme
 from .tokenBaseModel import Token
-from .auth_utils import create_access_token, get_current_user, get_user_by_username, verify_password
 from core.config import settings
 from datetime import timedelta
+from dependencies.database import get_db
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
@@ -12,8 +12,8 @@ authRouter = APIRouter()
 # It uses the get_current_user dependency to get the current user's details.
 # The endpoint is a GET request to "/users/me/".
 @authRouter.get("/users/me/")
-async def read_users_me(current_user: str=Depends(get_current_user)):
-    return {"username": current_user}
+async def read_users_me(token: str=Depends(oauth2_scheme), db=Depends(get_db)):
+    return get_current_user(token, db)
 
 # Endpoint used to authenticate a user and provide them with an access token.
 # It uses the OAuth2PasswordRequestForm dependency to get the user's login details.
@@ -22,7 +22,7 @@ async def read_users_me(current_user: str=Depends(get_current_user)):
 # If the user is not authenticated, it raises an HTTPException.
 @authRouter.post("/auth/", response_model=Token)
 async def login_for_access_token(db=Depends(get_db), form_data: OAuth2PasswordRequestForm=Depends()):
-    user = get_user_by_username(db, form_data.username)
+    user = get_user_by_username(form_data.username, db)
     def raise_login_exeption():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
