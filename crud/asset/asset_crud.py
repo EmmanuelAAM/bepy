@@ -1,4 +1,4 @@
-from dependencies.redis_connection import notify_redis_clients
+from dependencies.socket import notify_websocket_clients
 from fastapi import HTTPException, status
 from models.asset_model import Asset
 from schemas.asset_schema import AssetSchemaCreate, AssetSchema
@@ -10,7 +10,7 @@ def get_asset(db: Session, asset_id: Asset.id):
         raise HTTPException(status_code=404, detail="Item not found")
     return element
 
-# @notify_redis_clients(action="create", masterdata_name="asset")
+@notify_websocket_clients(action="create", masterdata_name="asset")
 def create_asset(db: Session, asset: AssetSchemaCreate):
     new_entry = Asset(name=asset.name)
     try:

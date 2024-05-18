@@ -1,64 +1,31 @@
-import json
-from aioredis import from_url, Redis
-from dependency_injector import containers, providers, wiring
-from fastapi import Depends, HTTPException
-from functools import wraps
-from pydantic import BaseModel
-from typing import AsyncIterator
 import aioredis
-import asyncio
+from fastapi import HTTPException
+from core.config import settings
 
-async def init_redis_pool(host: str, password: str) -> AsyncIterator[Redis]:
-    session = from_url(host, password={password}, encoding="utf-8", decode_responses=True, port=17558)
-
-    yield session
-    session.close()
-    await session.wait_closed()
-
-class Service:
-    def __init__(self, redis: Redis) -> None:
-        self._redis = redis
-
-    async def process(self, channel_name: str, message: str) -> str:
+class RedisSession:
+    def __init__(self) -> None:
+        self.session_local = aioredis.Redis(host=settings.redis_host, password={settings.redis_password}, encoding="utf-8", decode_responses=True, port=17558)
+        self.redis_pool = aioredis.ConnectionPool(connection_class=[self.session_local], port=6379, db=0)
+        
+    def process_message(self, channel_name: str, message: str):
         try:
-            await self._redis.publish(channel_name, message)
+            print(message)
+            print('Sending msj')
+            return self.session_local.publish(channel_name, message)
         except aioredis.RedisError:
             raise HTTPException(status_code=503, detail="Failed to connect to Redis, please try again later.")
 
-class Container(containers.DeclarativeContainer):
-
-    config = providers.Configuration()
-
-    redis_pool = providers.Resource(
-        init_redis_pool,
-        host=config.redis_host,
-        password=config.redis_password,
-    )
-
-    service = providers.Factory(
-        Service,
-        redis=redis_pool,
-    )
-
-@wiring.inject
-async def send_msj(message, service: Service = Depends(wiring.Provide[Container.service])):
-    await service.process("crud", json.dumps(message))
-
-def notify_redis_clients(action, masterdata_name):
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            result: BaseModel = func(*args, **kwargs)
-            print(action)
-            print(masterdata_name)
-            #To-do: check permissions.
-            message = {
-                "type": action,
-                "masterdata_name": masterdata_name,
-                "performed_by": kwargs.get('updated_by', 'Unknown'),  # Ensure updated_by is provided or default
-                "item": result.model_dump_json()
-            }
-            asyncio.create_task(send_msj(message=message))
-            return message
-        return wrapper
-    return decorator
+# The `get_redis` function is a generator function that is used to provide a database session to
+# the caller and ensure that the session is properly closed after its use. Here is a breakdown of
+# what the function is doing:
+def get_redis():
+    redis = RedisSession()
+    try:
+        # yield is a keyword used in a function like a return statement but it returns a generator. 
+        # A generator is an iterator, a kind of iterable you can only iterate over once.
+        # In this case, the yield db statement is used within a generator function get_db(). 
+        # This function is designed to provide a database session (db) to the caller and ensure that the session is properly closed after its use, even if an error occurs. 
+        # This pattern is particularly useful in web applications where you want to ensure that resources like database connections are properly managed and released after use.
+        yield redis
+    finally:
+        redis.close()

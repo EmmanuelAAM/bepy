@@ -23,12 +23,6 @@ async def connect_to_channel(websocket: WebSocket, channel_name: str):
         if not channels[channel_name]:  # Clean up empty channel
             del channels[channel_name]
 
-@app_with_socket.websocket("/ws/{channel_name}")
-async def websocket_endpoint(websocket: WebSocket, channel_name: str):
-    await websocket.accept()
-    await connect_to_channel(websocket, channel_name)
-
-
 async def broadcast_websocket_clients(message: str, channel_name: str="crud"):
     if channel_name in channels:
         disconnected_clients = []
